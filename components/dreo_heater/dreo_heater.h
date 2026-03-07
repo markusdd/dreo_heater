@@ -44,11 +44,11 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
   void set_temp_unit_switch(switch_::Switch *s) { temp_unit_switch = s; unit_switch = s; }
   void set_unit_switch(switch_::Switch *s) { unit_switch = s; temp_unit_switch = s; }
 
-  void set_temp_unit(bool is_fahrenheit) {
-    // 0x16 type 04 length 01. 0x01=°C, 0x02=°F (common Tuya convention, user can flip if needed)
-    send_tuya_dp(0x16, 0x04, 1, {(uint8_t)(is_fahrenheit ? 2 : 1)});
+  void set_temp_unit(bool is_celsius) {
+    // 0x16 type 04 length 01. 0x01=°C, 0x02=°F (common Tuya convention)
+    send_tuya_dp(0x16, 0x04, 1, {(uint8_t)(is_celsius ? 1 : 2)});
   }
-  void set_fahrenheit(bool is_fahrenheit) { set_temp_unit(is_fahrenheit); }
+  void set_fahrenheit(bool is_fahrenheit) { set_temp_unit(!is_fahrenheit); }
 
   void setup() override {
       ESP_LOGI("dreo", "Dreo Climate Initialized");
@@ -356,7 +356,7 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
               case 16: if (child_lock_switch) child_lock_switch->publish_state(val != 0); break;
               case 20: if (window_switch) window_switch->publish_state(val != 0); break;
               case 22: // 0x16 temp unit
-                if (unit_switch) unit_switch->publish_state(val == 2); // 2=Fahrenheit, 1=Celsius
+                if (unit_switch) unit_switch->publish_state(val == 1); // 1=Celsius, 2=Fahrenheit
                 break;
               default: break;
           }

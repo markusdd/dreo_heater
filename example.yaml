@@ -93,9 +93,9 @@ switch:
       - lambda: 'id(my_dreo).set_window_mode(false);'
 
   - platform: template
-    name: "Fahrenheit Units"
+    name: "Celsius Units"
     id: temp_unit_sw
-    icon: mdi:temperature-fahrenheit
+    icon: mdi:temperature-celsius
     optimistic: true
     turn_on_action:
       - lambda: 'id(my_dreo).set_temp_unit(true);'
