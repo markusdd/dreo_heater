@@ -53,7 +53,8 @@ climate:
 ```
 
 ## Usage
-- See comments in `example.yaml` for advanced usage (sound/display/lock, etc)
+- Many advanced options—such as sound, display, child lock, window detection, heat level, timer, and calibration—are available and shown in the [`example.yaml`](example.yaml). Consult this file to see all configurable switches and features you can add to your configuration.
+- See comments in `example.yaml` for additional tips on customizing these options.
 - Use with devices using BK7231N chips (Tuya-based Dreo wall heaters, etc)
 
 ## Contributing
