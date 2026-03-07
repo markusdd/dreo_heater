@@ -13,7 +13,8 @@ esphome:
           id(my_dreo).display_switch = id(disp_sw);
           id(my_dreo).child_lock_switch = id(lock_sw);
           id(my_dreo).window_switch = id(win_sw);
-
+          id(my_dreo).temp_unit_switch = id(temp_unit_sw);
+          
           id(my_dreo).heat_level_number = id(level_num);
           id(my_dreo).timer_number = id(timer_num);
           id(my_dreo).calibration_number = id(cal_num);
@@ -90,6 +91,16 @@ switch:
       - lambda: 'id(my_dreo).set_window_mode(true);'
     turn_off_action:
       - lambda: 'id(my_dreo).set_window_mode(false);'
+
+  - platform: template
+    name: "Celsius Units"
+    id: temp_unit_sw
+    icon: mdi:temperature-celsius
+    optimistic: true
+    turn_on_action:
+      - lambda: 'id(my_dreo).set_temp_unit(true);'
+    turn_off_action:
+      - lambda: 'id(my_dreo).set_temp_unit(false);'
 
 number:
   - platform: template

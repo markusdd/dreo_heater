@@ -33,13 +33,25 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
   switch_::Switch *child_lock_switch{nullptr};
   switch_::Switch *window_switch{nullptr};
   
+  // Backward compatible and alias for unit switch
+  switch_::Switch *temp_unit_switch{nullptr};
+  switch_::Switch *unit_switch{nullptr};
+
   number::Number *heat_level_number{nullptr};
   number::Number *timer_number{nullptr};
   number::Number *calibration_number{nullptr};
 
+  void set_temp_unit_switch(switch_::Switch *s) { temp_unit_switch = s; unit_switch = s; }
+  void set_unit_switch(switch_::Switch *s) { unit_switch = s; temp_unit_switch = s; }
+
+  void set_temp_unit(bool is_celsius) {
+    // 0x16 type 04 length 01. 0x02=°C, 0x01=°F
+    send_tuya_dp(0x16, 0x04, 1, {(uint8_t)(is_celsius ? 2 : 1)});
+  }
+  void set_fahrenheit(bool is_fahrenheit) { set_temp_unit(!is_fahrenheit); }
+
   void setup() override {
       ESP_LOGI("dreo", "Dreo Climate Initialized");
-      // Pre-allocate buffer not needed for deque, and not supported
       send_tuya_raw(0x00, {}); 
       delay(50);
       send_tuya_raw(0x03, {0x02, 0x05, 0x00});
@@ -54,7 +66,7 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
         climate::CLIMATE_SUPPORTS_ACTION
     );
     
-    // MODES: HEAT and FAN_ONLY (Auto removed to keep slider visible)
+    // MODES: HEAT and FAN_ONLY
     traits.set_supported_modes({
       climate::CLIMATE_MODE_OFF,
       climate::CLIMATE_MODE_HEAT,
@@ -67,7 +79,7 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
         climate::CLIMATE_PRESET_ECO
     });
 
-    // CUSTOM PRESETS: Only H1-H3 here (Eco is now Standard)
+    // CUSTOM PRESETS: Only H1-H3 here
     traits.set_supported_custom_presets({
         PRESET_H1,
         PRESET_H2,
@@ -121,8 +133,6 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
             return;
         }
         else if (p == climate::CLIMATE_PRESET_NONE) {
-            // If user unchecks Eco, what should happen? 
-            // Let's stay in Heat mode, clear presets.
             this->preset = climate::CLIMATE_PRESET_NONE;
             this->set_custom_preset_("");
             this->publish_state();
@@ -162,7 +172,6 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
     // 4. Handle Temp Changes
     if (call.get_target_temperature().has_value()) {
       float temp_c = *call.get_target_temperature();
-      // Optimization: Avoid double promotion and function call overhead by using float literals and inline rounding
       uint8_t temp_f = (uint8_t)(temp_c * 1.8f + 32.0f + 0.5f);
       if (temp_f < 41) temp_f = 41;
       if (temp_f > 95) temp_f = 95;
@@ -180,10 +189,8 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
         last_hb_ = now;
     }
 
-    // Optimization: Batch process incoming bytes to reduce parse_rx() overhead
-    // and reduce function call overhead by reading in chunks.
     bool data_received = false;
-    uint8_t buf[128]; // Optimization: Allocate buffer once outside the loop
+    uint8_t buf[128]; 
     while (available()) {
       int to_read = std::min((int)available(), 128);
       read_array(buf, to_read);
@@ -202,7 +209,6 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
   void parse_rx() {
       while (rx_buf_.size() >= 9) { 
           if (rx_buf_[0] != 0x55 || rx_buf_[1] != 0xAA) {
-              // Optimization: Bulk remove garbage using std::find
               auto it = std::find(rx_buf_.begin(), rx_buf_.end(), 0x55);
               if (it == rx_buf_.end()) {
                   rx_buf_.clear();
@@ -227,8 +233,6 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
           if (rx_buf_.size() < packet_len) return; 
           
           uint8_t received_sum = rx_buf_[packet_len - 1];
-          // Optimization: Use std::accumulate for faster deque iteration.
-          // Safe because packet_len >= 9 (Header 8 + Checksum 1), so range [begin+2, begin+packet_len-1) is valid.
           uint32_t calc_sum = std::accumulate(rx_buf_.begin() + 2, rx_buf_.begin() + packet_len - 1, 0);
           uint8_t expected_sum = (uint8_t)((calc_sum - 1) & 0xFF);
           
@@ -243,8 +247,6 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
   }
   
   void process_status(int start_idx, int len) {
-      // Optimization: Use iterators and unroll loops for faster processing
-      // avoiding repeated std::deque operator[] lookups.
       auto it = rx_buf_.begin() + start_idx;
       auto end_it = it + len;
       bool changed = false;
@@ -260,15 +262,12 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
           if (dp_len == 1) {
               val = *val_it;
           } else if (dp_len == 4) {
-              // Optimization: Unroll 4-byte integers (Big Endian) using iterator increment
-              // to avoid expensive deque iterator random access (operator+)
               auto it2 = val_it;
               val = ((uint32_t)*it2++ << 24);
               val |= ((uint32_t)*it2++ << 16);
               val |= ((uint32_t)*it2++ << 8);
               val |= ((uint32_t)*it2);
           } else {
-              // Optimization: Use sequential iterator increment
               auto it2 = val_it;
               for(int i=0; i<dp_len; i++) {
                   val = (val << 8) + *it2++;
@@ -289,7 +288,6 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
                       this->preset = climate::CLIMATE_PRESET_NONE;
                   } else if (this->mode == climate::CLIMATE_MODE_OFF) {
                       this->mode = climate::CLIMATE_MODE_HEAT;
-                      // Assume ECO on startup until we hear otherwise
                       this->preset = climate::CLIMATE_PRESET_ECO;
                   }
                   changed = true;
@@ -311,7 +309,6 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
                       else if (val == 1) { // Manual
                           this->mode = climate::CLIMATE_MODE_HEAT;
                           this->preset = climate::CLIMATE_PRESET_NONE;
-                          // We wait for DP3 to set the specific H1-H3 label
                       }
                       changed = true;
                   }
@@ -321,7 +318,6 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
                   if (heat_level_number) heat_level_number->publish_state(val);
 
                   if (this->mode == climate::CLIMATE_MODE_HEAT && this->preset != climate::CLIMATE_PRESET_ECO) {
-                      // Only update H1-H3 if we are NOT in Eco mode
                       if (val == 1) this->set_custom_preset_(PRESET_H1);
                       else if (val == 2) this->set_custom_preset_(PRESET_H2);
                       else if (val == 3) this->set_custom_preset_(PRESET_H3);
@@ -331,14 +327,12 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
 
               case 4: { // Target Temp
                   float temp_f = (float)val;
-                  // Optimization: Use float literals to avoid double-precision emulation
                   this->target_temperature = (temp_f - 32.0f) * 5.0f / 9.0f;
                   changed = true;
                   break;
               }
               case 7: { // Current Temp
                   float temp_f = (float)val;
-                  // Optimization: Use float literals to avoid double-precision emulation
                   this->current_temperature = (temp_f - 32.0f) * 5.0f / 9.0f;
                   changed = true;
                   break;
@@ -361,6 +355,9 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
               case 15: if (calibration_number) calibration_number->publish_state((int)val); break;
               case 16: if (child_lock_switch) child_lock_switch->publish_state(val != 0); break;
               case 20: if (window_switch) window_switch->publish_state(val != 0); break;
+              case 22: // 0x16 temp unit
+                if (unit_switch) unit_switch->publish_state(val == 2); // 2=Celsius, 1=Fahrenheit
+                break;
               default: break;
           }
           
@@ -411,52 +408,39 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
     send_tuya_raw(0x06, data, 9);
   }
 
-  // Internal helper to avoid code duplication
   template <typename T>
   void send_tuya_dp_impl(uint8_t dp, uint8_t type, uint8_t len, const T &val) {
     uint8_t data[64];
     size_t idx = 0;
-
-    // Protocol logic preserved from original implementation:
-    // It seems to write len (low byte?) then 0x00 (high byte?).
-    // And an extra 0x01 byte if len >= 1.
     if (idx < sizeof(data)) data[idx++] = dp;
     if (idx < sizeof(data)) data[idx++] = type;
     if (idx < sizeof(data)) data[idx++] = len;
     if (idx < sizeof(data)) data[idx++] = 0x00;
-
     if (len >= 1 && idx < sizeof(data)) data[idx++] = 0x01;
-
     for (auto b : val) {
         if (idx < sizeof(data)) data[idx++] = b;
     }
-
     send_tuya_raw(0x06, data, idx);
   }
 
-  // Optimization: Use stack buffer to avoid vector allocation
   void send_tuya_dp(uint8_t dp, uint8_t type, uint8_t len, std::initializer_list<uint8_t> val) {
       send_tuya_dp_impl(dp, type, len, val);
   }
 
-  // Backwards compatibility overload
   void send_tuya_dp(uint8_t dp, uint8_t type, uint8_t len, const std::vector<uint8_t> &val) {
       send_tuya_dp_impl(dp, type, len, val);
   }
 
-  // Optimization: Pass by const reference to avoid unnecessary vector copies
   void send_tuya_raw(uint8_t cmd, const std::vector<uint8_t> &data) {
     send_tuya_raw(cmd, data.data(), data.size());
   }
 
-  // Optimization: Support initializer_list to avoid vector construction
   void send_tuya_raw(uint8_t cmd, std::initializer_list<uint8_t> data) {
     send_tuya_raw(cmd, data.begin(), data.size());
   }
 
-  // Optimization: Use stack buffer for packet construction
   void send_tuya_raw(uint8_t cmd, const uint8_t* payload, size_t len) {
-    uint8_t pkt[128]; // Stack buffer
+    uint8_t pkt[128]; 
     size_t payload_len = len;
     size_t packet_len = 8 + payload_len + 1;
 
