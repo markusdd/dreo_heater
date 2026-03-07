@@ -1,0 +1,11 @@
+# ESPHome/Dreo Heater external component build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.swp
+.DS_Store
+*.bak
+*.egg-info/
+/build/
+/.vscode/
+*.log
