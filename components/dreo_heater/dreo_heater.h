@@ -31,18 +31,22 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
   switch_::Switch *display_switch{nullptr};
   switch_::Switch *child_lock_switch{nullptr};
   switch_::Switch *window_switch{nullptr};
+  // Backward compatible and alias for unit switch
   switch_::Switch *temp_unit_switch{nullptr};
+  switch_::Switch *unit_switch{nullptr};
 
   number::Number *heat_level_number{nullptr};
   number::Number *timer_number{nullptr};
   number::Number *calibration_number{nullptr};
 
-  void set_temp_unit_switch(switch_::Switch *s) { temp_unit_switch = s; }
+  void set_temp_unit_switch(switch_::Switch *s) { temp_unit_switch = s; unit_switch = s; }
+  void set_unit_switch(switch_::Switch *s) { unit_switch = s; temp_unit_switch = s; }
 
   void set_temp_unit(bool is_fahrenheit) {
     // 0x16 type 04 length 01. 0x01=°C, 0x02=°F (common Tuya convention, user can flip if needed)
     send_tuya_dp(0x16, 0x04, 1, {(uint8_t)(is_fahrenheit ? 2 : 1)});
   }
+  void set_fahrenheit(bool is_fahrenheit) { set_temp_unit(is_fahrenheit); }
 
   void setup() override {
       ESP_LOGI("dreo", "Dreo Climate Initialized");

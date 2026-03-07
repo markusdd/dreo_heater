@@ -15,6 +15,7 @@ CONFIG_SCHEMA = climate._CLIMATE_SCHEMA.extend({
     cv.GenerateID(): cv.declare_id(DreoHeater),
     cv.Optional(CONF_DEBUG, default=False): cv.boolean,
     cv.Optional(CONF_TEMP_UNIT_SWITCH): cv.use_id(switch.Switch),
+    cv.Optional("unit_switch"): cv.use_id(switch.Switch),
 }).extend(uart.UART_DEVICE_SCHEMA).extend(cv.COMPONENT_SCHEMA)
 
 async def to_code(config):
@@ -26,6 +27,10 @@ async def to_code(config):
     if config.get(CONF_TEMP_UNIT_SWITCH) is not None:
         temp_unit_switch = await cg.get_variable(config[CONF_TEMP_UNIT_SWITCH])
         cg.add(var.set_temp_unit_switch(temp_unit_switch))
+
+    if config.get("unit_switch") is not None:
+        unit_switch_var = await cg.get_variable(config["unit_switch"])
+        cg.add(var.set_unit_switch(unit_switch_var))
 
     if config[CONF_DEBUG]:
         cg.add(var.set_debug(True))
