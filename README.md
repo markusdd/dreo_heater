@@ -20,8 +20,9 @@ Add to your ESPHome YAML:
 external_components:
   - source:
       type: git
-      url: https://github.com/lygris/dreo_heater.git
+      url: https://github.com/lygris/dreo_heater
     refresh: 0s
+    components: [dreo_heater]  
 ```
 
 Then use the `climate` platform in your config (see example.yaml).

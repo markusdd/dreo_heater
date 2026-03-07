@@ -32,8 +32,9 @@ uart:
 external_components:
   - source:
       type: git
-      url: https://github.com/lygris/dreo_heater.git
+      url: https://github.com/lygris/dreo_heater
     refresh: 0s
+    components: [dreo_heater]  
 
 # Now you can use it like a native ESPHome platform!
 climate:
