@@ -1,0 +1,11 @@
+{
+  "domain": "dreo_heater",
+  "name": "Dreo Heater Climate Platform",
+  "version": "0.1.0",
+  "documentation": "https://github.com/lygris/dreo_heater",
+  "dependencies": [],
+  "requirements": [],
+  "codeowners": ["@lygris"],
+  "files": ["dreo_heater/climate.py", "dreo_heater/__init__.py", "dreo_heater/dreo_heater.h"],
+  "config_flow": false
+}
