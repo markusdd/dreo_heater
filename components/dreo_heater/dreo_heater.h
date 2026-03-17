@@ -65,6 +65,7 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
   void set_temp_unit(bool is_celsius) {
     uint8_t v = is_celsius ? 2 : 1;
     send_tuya_dp(TuyaDP::TEMP_UNIT, 0x04, &v, 1);
+    if (unit_switch) unit_switch->publish_state(is_celsius);
   }
   void set_fahrenheit(bool is_fahrenheit) { set_temp_unit(!is_fahrenheit); }
 
@@ -194,11 +195,7 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
     // 4. Handle Temp Changes
     if (call.get_target_temperature().has_value()) {
       float temp_c = *call.get_target_temperature();
-      uint8_t temp_f = c_to_f(temp_c);
-      if (temp_f < 41) temp_f = 41;
-      if (temp_f > 95) temp_f = 95;
-      
-      set_temperature(temp_f);
+      set_temperature(temp_c);
       this->target_temperature = temp_c;
       this->publish_state();
     }
@@ -348,12 +345,24 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
                   break;
 
               case TuyaDP::TARGET_TEMP: { 
-                  this->target_temperature = f_to_c((float)val);
+                  float val_f = (float)val;
+                  bool is_celsius = (unit_switch && unit_switch->state);
+                  if (is_celsius) {
+                      this->target_temperature = val_f;
+                  } else {
+                      this->target_temperature = f_to_c(val_f);
+                  }
                   changed = true;
                   break;
               }
               case TuyaDP::CURRENT_TEMP: { 
-                  this->current_temperature = f_to_c((float)val);
+                  float val_f = (float)val;
+                  bool is_celsius = (unit_switch && unit_switch->state);
+                  if (is_celsius) {
+                      this->current_temperature = val_f;
+                  } else {
+                      this->current_temperature = f_to_c(val_f);
+                  }
                   changed = true;
                   break;
               }
@@ -405,7 +414,19 @@ class DreoHeater : public climate::Climate, public uart::UARTDevice, public Comp
 
   void set_power(bool on) { uint8_t v = on ? 1 : 0; send_tuya_dp(TuyaDP::POWER, 0x01, &v, 1); }
   void set_mode(int mode) { uint8_t v = mode; send_tuya_dp(TuyaDP::MODE, 0x01, &v, 1); }
-  void set_temperature(uint8_t temp_f) { uint8_t v = temp_f; send_tuya_dp(TuyaDP::TARGET_TEMP, 0x01, &v, 1); }
+  void set_temperature(float temp_c) {
+    bool is_celsius = (unit_switch && unit_switch->state);
+    uint8_t v;
+    if (is_celsius) {
+        v = (uint8_t)(temp_c + 0.5f);
+    } else {
+        uint8_t temp_f = c_to_f(temp_c);
+        if (temp_f < 41) temp_f = 41;
+        if (temp_f > 95) temp_f = 95;
+        v = temp_f;
+    }
+    send_tuya_dp(TuyaDP::TARGET_TEMP, 0x01, &v, 1);
+  }
   void set_heat_level(int level) { uint8_t v = level; send_tuya_dp(TuyaDP::HEAT_LEVEL, 0x01, &v, 1); }
   
   void set_sound(bool on) { uint8_t v = on ? 0 : 1; send_tuya_dp(TuyaDP::SOUND, 0x01, &v, 1); } 
